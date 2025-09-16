@@ -4,7 +4,11 @@
 
 #include <raylib.h>
 #include "Player.h"
+#include "../helper.h"
+#include <vector>
+#include <iostream>
 
+#include "temp.h"
 
 
 class Engine {
@@ -25,6 +29,8 @@ private:
     bool running = true;
     Camera2D camera;
     Player player;
+    Map map;
+
 
     void init() {
         InitWindow(1280, 720, "Cozy Farming Game");
@@ -32,15 +38,30 @@ private:
         camera = {0};
         camera.target = {0, 0};
         camera.zoom = 3.0f;
-        camera.offset = {0, 0};
+        camera.offset = {GetScreenWidth()/2.0f - 8, GetScreenHeight()/2.0f - 8}; // 8 is half the player sprite w and h
 
 
         player.init({0,0}, 1);
+
+        tmx::Map tempMap;
+        if (!tempMap.load("assets/maps/playerHouse.tmx")) {
+            running = false;
+            cleanUp();
+            THROW_ERROR("Failed to load map");
+        }
+
+        map.loadMap(&tempMap, &player.position);
+
+    }
+
+    void updateCamera() {
+        camera.target = player.position;
     }
 
 
     void update() {
         player.update();
+        updateCamera();
     }
 
     void pollInput() {
@@ -65,12 +86,14 @@ private:
 
     void render() {
         BeginDrawing();
-        ClearBackground(BLACK);
-        BeginMode2D(camera);
+            ClearBackground(BLACK);
 
-        player.render();
+            BeginMode2D(camera);
 
-        EndMode2D();
+                map.render();
+                player.render();
+
+            EndMode2D();
         EndDrawing();
     }
 
