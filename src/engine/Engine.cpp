@@ -19,6 +19,7 @@ public:
         while (running) {
             pollInput();
             update();
+            animate();
             render();
         }
         cleanUp();
@@ -29,7 +30,7 @@ private:
     bool running = true;
     Camera2D camera;
     Player player;
-    Map map;
+    std::vector<Map> maps{2};
 
 
     void init() {
@@ -42,7 +43,7 @@ private:
 
 
         player.init({0,0}, 1);
-
+/*
         tmx::Map tempMap;
         if (!tempMap.load("assets/maps/playerHouse.tmx")) {
             running = false;
@@ -50,7 +51,16 @@ private:
             THROW_ERROR("Failed to load map");
         }
 
-        map.loadMap(&tempMap, &player.position);
+        maps[0].loadMap(&tempMap, &player.position);
+*/
+        tmx::Map tempMap2;
+        if (!tempMap2.load("assets/maps/mainIsland.tmx")) {
+            running = false;
+            cleanUp();
+            THROW_ERROR("Failed to load map");
+        }
+
+        maps[1].loadMap(&tempMap2, &player.position);
 
     }
 
@@ -83,6 +93,10 @@ private:
 
     }
 
+    void animate() {
+        maps[1].animate();
+    }
+
 
     void render() {
         BeginDrawing();
@@ -90,10 +104,15 @@ private:
 
             BeginMode2D(camera);
 
-                map.render();
+                maps[1].render();
                 player.render();
 
             EndMode2D();
+
+        // DEBUG DRAWS
+        DrawText(("Frame Time: " + std::to_string(GetFrameTime())).c_str(), 10, 10, 20, GREEN);
+        DrawText(("Frame Rate: " + std::to_string(1.0f / GetFrameTime())).c_str(), 10, 30, 20, GREEN);
+
         EndDrawing();
     }
 

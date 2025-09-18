@@ -25,6 +25,7 @@ inline int getTileSet(uint32_t id, std::vector<std::pair<uint32_t, uint32_t>> ti
     return -1;
 }
 
+
 struct Door {
     int doorID;
     int mapID;
@@ -41,6 +42,7 @@ struct Tile {
     uint32_t id;
     int x;
     int y;
+    bool animated;
 };
 
 struct TMXTexture {
@@ -48,26 +50,57 @@ struct TMXTexture {
     Rectangle* clipRect;
     int x;
     int y;
-    bool draw;
+};
+
+struct TMXAnimatedTexture {
+    Texture2D* texture;
+    std::vector<float> frameDelayTimes;
+    double lastFrameTime = 0.0;
+    int frameCount = 0;
+    int currentFrame = 0;
+    int x;
+    int y;
+
+    Rectangle createAnimationFrameRect() {
+        return Rectangle{static_cast<float>(16 * currentFrame),0,16,16};
+    }
 };
 
 struct Map {
     std::vector<std::vector<TMXTexture>> layerTextures;
+    std::vector<std::vector<TMXAnimatedTexture>> animatedLayerTextures;
     std::vector<Texture2D> tilesetTextures;
     std::vector<Rectangle> tilesetClipRects;
     std::vector<PlayerSpawn> playerSpawns;
     PlayerSpawn defaultPlayerSpawn;
 
 
-    void render() {
-
-        for (auto& layer : layerTextures) {
-            for (auto& texture : layer) {
-                if (texture.draw) {
-                    DrawTextureRec(*texture.texture, *texture.clipRect, {static_cast<float>(texture.x), static_cast<float>(texture.y)}, RAYWHITE);
+    void animate() {
+        double currentFrameTime = GetTime()*1000;
+        for (auto& layer : animatedLayerTextures) {
+            for (auto& animationTexture : layer) {
+                if (currentFrameTime - animationTexture.lastFrameTime >= animationTexture.frameDelayTimes[animationTexture.currentFrame]) {
+                    animationTexture.currentFrame = (animationTexture.currentFrame + 1) % animationTexture.frameCount;
+                    animationTexture.lastFrameTime = currentFrameTime;
                 }
             }
         }
+    }
+
+    void render() {
+        for (int layer = 0; layer < animatedLayerTextures.size(); layer++) {
+
+            // REGULAR TILES
+            for (int texture = 0; texture < layerTextures[layer].size(); texture++) {
+                DrawTextureRec(*layerTextures[layer][texture].texture, *layerTextures[layer][texture].clipRect, {static_cast<float>(layerTextures[layer][texture].x), static_cast<float>(layerTextures[layer][texture].y)}, RAYWHITE);
+            }
+
+            // ANIMATED TILES
+            for (int texture = 0; texture < animatedLayerTextures[layer].size(); texture++) {
+                DrawTextureRec(*animatedLayerTextures[layer][texture].texture, animatedLayerTextures[layer][texture].createAnimationFrameRect(), {static_cast<float>(animatedLayerTextures[layer][texture].x), static_cast<float>(animatedLayerTextures[layer][texture].y)}, RAYWHITE);
+            }
+        }
+
     };
 
 
@@ -75,22 +108,31 @@ struct Map {
         uint32_t tilesetTileCount = 0;
         std::vector<std::string> tilesetTexturePaths;
         std::vector<std::pair<uint32_t, uint32_t>> tilesetIDs;
-        const auto& tilesets = map->getTilesets();
+        std::vector<tmx::Tileset> tilesets = map->getTilesets();
+        std::vector<bool> animatedTileset;
         std::vector<tmx::Tileset::Tile> tile;
         int tileSize = 16;
         std::vector<Tile> tileData;
         int counter = 0;
 
         for(const auto& tileset : tilesets){
+            bool animated = false;
             tilesetTileCount += tileset.getTileCount();
             tilesetIDs.emplace_back(tileset.getFirstGID(), tileset.getLastGID());
             tilesetTexturePaths.emplace_back(tileset.getImagePath());
             tilesetTextures.emplace_back(LoadTexture(tileset.getImagePath().c_str()));
 
+
             for (const auto& t : tileset.getTiles()) {
-                counter++;
+                if (!t.animation.frames.empty()) { animated = true; }
+
+                std::cout << "ID: " << t.ID << " Pos: " << t.imagePosition.x << ", " << t.imagePosition.y << " Size: " << t.imageSize.x << ", " << t.imageSize.y << std::endl;
                 tilesetClipRects.emplace_back(Rectangle {static_cast<float>(t.imagePosition.x), static_cast<float>(t.imagePosition.y), static_cast<float>(t.imageSize.x), static_cast<float>(t.imageSize.y)});
+
             }
+
+            animatedTileset.emplace_back(animated);
+
 
         }
 
@@ -100,6 +142,7 @@ struct Map {
 
         int currentLayer = 0;
         layerTextures.resize(map->getLayers().size());
+        animatedLayerTextures.resize(map->getLayers().size());
         for (const auto& layer : map->getLayers()) {
             tileData.clear();
             tmx::Layer::Type layerType = layer->getType();
@@ -110,43 +153,65 @@ struct Map {
                 for (const auto& chunk : chunks) {
                     int chunkXOffset = chunk.position.x * chunk.size.x;
                     int chunkYOffset = chunk.position.y * chunk.size.y;
-                    tileData.resize(chunk.tiles.size());
+                    tileData.clear();
+                    tileData.resize(0);
                     int counter = 0;
 
                     for (int j = 0; j < chunk.tiles.size() / chunk.size.y; j++) {
                         for (int z = 0; z < chunk.tiles.size() / chunk.size.x; z++) {
-                            tileData[counter].id = chunk.tiles[counter].ID;
-                            tileData[counter].x = tileSize * z + chunkXOffset;
-                            tileData[counter].y = tileSize * j + chunkYOffset;
+                            if (chunk.tiles[counter].ID != 0) {
+                                Tile td;
+                                td.id = chunk.tiles[counter].ID;
+                                td.x = tileSize * z + chunkXOffset;
+                                td.y = tileSize * j + chunkYOffset;
+                                tileData.push_back(td);
+                            }
+
                             counter++;
                         }
                     }
 
                     for (int i = 0; i < tileData.size(); i++) {
-                        TMXTexture textureData;
+                        int tilesetID = getTileSet(tileData[i].id, tilesetIDs);
 
-                        int tilesetIndex = getTileSet(tileData[i].id, tilesetIDs);
+                        if (animatedTileset[tilesetID]) {
+                            TMXAnimatedTexture textureData;
 
+                            textureData.texture = &tilesetTextures[tilesetID];
+                            textureData.frameCount = tilesets[tilesetID].getTileCount();
+                            textureData.x = tileData[i].x;
+                            textureData.y = tileData[i].y;
 
-                        if (tilesetIndex >= 0) {
-                            textureData.texture = &tilesetTextures[tilesetIndex];
-                            textureData.draw = true;
-                        }
-                        else {
-                            textureData.draw = false;
-                        }
-
-                        for (int j = 0; j < tilesetClipRects.size(); j++) {
-                            if (j +1 == tileData[i].id) {
-                                textureData.clipRect = &tilesetClipRects[j];
+                            for (auto& frame : tilesets[tilesetID].getTiles()[0].animation.frames) {
+                                textureData.frameDelayTimes.emplace_back(frame.duration);
                             }
+
+                            animatedLayerTextures[currentLayer].emplace_back(textureData);
+
+
+
                         }
 
+                        else {
+                            TMXTexture textureData;
 
-                        textureData.x = tileData[i].x;
-                        textureData.y = tileData[i].y;
+                            textureData.texture = &tilesetTextures[tilesetID];
 
-                        layerTextures[currentLayer].emplace_back(textureData);
+
+                            for (int j = 0; j < tilesetClipRects.size(); j++) {
+                                if (j + 1 == tileData[i].id) {
+                                    std::cout << "ID: " << tileData[i].id << std::endl;
+                                    textureData.clipRect = &tilesetClipRects[j];
+                                }
+                            }
+
+
+                            textureData.x = tileData[i].x;
+                            textureData.y = tileData[i].y;
+
+                            layerTextures[currentLayer].emplace_back(textureData);
+                        }
+
                     }
 
 
@@ -186,15 +251,7 @@ struct Map {
                     layerTextures[currentLayer].resize(tileData.size());
                     for (int i = 0; i < tileData.size(); i++) {
 
-                        int tilesetIndex = getTileSet(tileData[i].id, tilesetIDs);
-
-                        if (tilesetIndex >= 0) {
-                            layerTextures[currentLayer][i].texture = &tilesetTextures[tilesetIndex];
-                            layerTextures[currentLayer][i].draw = true;
-                        }
-                        else {
-                            layerTextures[currentLayer][i].draw = false;
-                        }
+                        layerTextures[currentLayer][i].texture = &tilesetTextures[getTileSet(tileData[i].id, tilesetIDs)];
 
                         for (int j = 0; j < tilesetClipRects.size(); j++) {
                             if (j +1 == tileData[i].id) {

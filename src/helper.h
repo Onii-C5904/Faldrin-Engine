@@ -10,4 +10,7 @@
 void log(const char* msg);
 
 
+
+
+
 #endif //HELPER_H
