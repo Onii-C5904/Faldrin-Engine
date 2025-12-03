@@ -13,6 +13,7 @@
 
 struct PlayerSpawn;
 
+
 inline int getTileSet(uint32_t id, std::vector<std::pair<uint32_t, uint32_t>> tileSetIds) {
     for (int i = 0; i < tileSetIds.size(); i++) {
         const int min = tileSetIds[i].first;
@@ -24,6 +25,12 @@ inline int getTileSet(uint32_t id, std::vector<std::pair<uint32_t, uint32_t>> ti
 
     return -1;
 }
+
+enum MAPID {
+    HOUSE,
+    MAIN_ISLAND,
+    MAPID_COUNT
+};
 
 
 struct Door {
@@ -71,6 +78,7 @@ struct Map {
     std::vector<std::vector<TMXAnimatedTexture>> animatedLayerTextures;
     std::vector<Texture2D> tilesetTextures;
     std::vector<Rectangle> tilesetClipRects;
+    std::vector<Box2D> colBoxes;
     std::vector<PlayerSpawn> playerSpawns;
     PlayerSpawn defaultPlayerSpawn;
 
@@ -104,7 +112,7 @@ struct Map {
     };
 
 
-    Map loadMap(tmx::Map *map, Vector2* playerPos) {
+    Map loadMap(tmx::Map *map, Vector2* playerPos, std::vector<Box2D*>* collisionBoxes) {
         uint32_t tilesetTileCount = 0;
         std::vector<std::string> tilesetTexturePaths;
         std::vector<std::pair<uint32_t, uint32_t>> tilesetIDs;
@@ -113,8 +121,9 @@ struct Map {
         std::vector<tmx::Tileset::Tile> tile;
         int tileSize = 16;
         std::vector<Tile> tileData;
-        int counter = 0;
 
+        tilesetClipRects.resize(0);
+        int processedTileCount = 0;
         for(const auto& tileset : tilesets){
             bool animated = false;
             tilesetTileCount += tileset.getTileCount();
@@ -124,12 +133,15 @@ struct Map {
 
 
             for (const auto& t : tileset.getTiles()) {
+                tilesetClipRects.resize(tilesetClipRects.size() + tileset.getTileCount());
                 if (!t.animation.frames.empty()) { animated = true; }
 
-                std::cout << "ID: " << t.ID << " Pos: " << t.imagePosition.x << ", " << t.imagePosition.y << " Size: " << t.imageSize.x << ", " << t.imageSize.y << std::endl;
-                tilesetClipRects.emplace_back(Rectangle {static_cast<float>(t.imagePosition.x), static_cast<float>(t.imagePosition.y), static_cast<float>(t.imageSize.x), static_cast<float>(t.imageSize.y)});
+                std::cout << "ID: " << t.ID << " ---- " << "Position: " << t.imagePosition.x << ", " << t.imagePosition.y << " ---- " << "Size: " << t.imageSize.x << ", " << t.imageSize.y << "\n--------------------------------------------------------------------"<< std::endl;
 
+
+                tilesetClipRects[t.ID + processedTileCount] = (Rectangle {static_cast<float>(t.imagePosition.x), static_cast<float>(t.imagePosition.y), static_cast<float>(t.imageSize.x), static_cast<float>(t.imageSize.y)});
             }
+            processedTileCount = tilesetTileCount;
 
             animatedTileset.emplace_back(animated);
 
@@ -145,11 +157,20 @@ struct Map {
         animatedLayerTextures.resize(map->getLayers().size());
         for (const auto& layer : map->getLayers()) {
             tileData.clear();
+
             tmx::Layer::Type layerType = layer->getType();
 
             if (layerType == tmx::Layer::Type::Tile) {
                 tmx::TileLayer tileLayer = layer->getLayerAs<tmx::TileLayer>();
                 std::vector<tmx::TileLayer::Chunk> chunks = tileLayer.getChunks();
+
+                layerTextures[currentLayer].clear();
+                layerTextures[currentLayer].resize(0);
+
+                animatedLayerTextures[currentLayer].clear();
+                animatedLayerTextures[currentLayer].resize(0);
+
+
                 for (const auto& chunk : chunks) {
                     int chunkXOffset = chunk.position.x * chunk.size.x;
                     int chunkYOffset = chunk.position.y * chunk.size.y;
@@ -170,6 +191,7 @@ struct Map {
                             counter++;
                         }
                     }
+
 
                     for (int i = 0; i < tileData.size(); i++) {
                         int tilesetID = getTileSet(tileData[i].id, tilesetIDs);
@@ -197,10 +219,8 @@ struct Map {
 
                             textureData.texture = &tilesetTextures[tilesetID];
 
-
                             for (int j = 0; j < tilesetClipRects.size(); j++) {
                                 if (j + 1 == tileData[i].id) {
-                                    std::cout << "ID: " << tileData[i].id << std::endl;
                                     textureData.clipRect = &tilesetClipRects[j];
                                 }
                             }
@@ -238,15 +258,31 @@ struct Map {
                     playerPos->y = defaultPlayerSpawn.position.y;
                 }
 
+                else if (objectLayer.getName() == "collisions") {
+                    log("collisions");
+                    for (const auto& collisionObject : objectLayer.getObjects()) {
+                        tmx::FloatRect collisionBox = collisionObject.getAABB();
+                        Box2D constructedBox;
+                        constructedBox.position.x = collisionObject.getPosition().x;
+                        constructedBox.position.y = collisionObject.getPosition().y;
+
+                        constructedBox.width = collisionBox.width;
+                        constructedBox.height = collisionBox.height;
+
+                        colBoxes.emplace_back(constructedBox);
+                    }
+                }
+
                 else {
                     std::vector<tmx::Object> objects = objectLayer.getObjects();
-                    std::vector<Tile> tileData{objects.size()};
+                    std::vector<Tile> tileData;
                     for (int i = 0; i < objects.size(); i++) {
-                        tileData[i].id = objects[i].getTileID();
-                        tileData[i].x = objects[i].getPosition().x;
-                        tileData[i].y = objects[i].getPosition().y;
+                        Tile td;
+                        td.id = objects[i].getTileID();
+                        td.x = objects[i].getPosition().x;
+                        td.y = objects[i].getPosition().y;
+                        tileData.emplace_back(td);
                     }
-
 
                     layerTextures[currentLayer].resize(tileData.size());
                     for (int i = 0; i < tileData.size(); i++) {
@@ -281,6 +317,12 @@ struct Map {
             currentLayer++;
 
         }
+
+
+        for (auto& colBox : colBoxes) {
+            collisionBoxes->emplace_back(&colBox);
+        }
+
         return *this;
     }
 };

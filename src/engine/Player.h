@@ -6,25 +6,30 @@
 #define PLAYER_H
 
 #include <raylib.h>
-#include <raymath.h>
+
 #include "../rendering/Sprite.h"
-#include <string>
+#include "Physics.h"
 
 
 class Player {
 
 public:
-    void init(Vector2 pos, float speed);
+    void init(Vector2 pos, float speed, std::vector<Box2D*>* colBoxes);
     void update();
     void render();
-    Vector2 position = {0,0};
+    Box2D physicsBox;
+    Vector2* position = &physicsBox.position;
+    Vector2* dir = &physicsBox.direction;
+    Vector2* velocity = &physicsBox.velocity;
+    std::vector<Box2D*>* collisionBoxes;
+
     float speed = 0.0;
-    Vector2 velocity = {0,0};
     bool up = false;
     bool down = false;
     bool left = false;
     bool right = false;
-    Vector2 dir = {0,0};
+
+
 
 private:
     Sprite sprite;

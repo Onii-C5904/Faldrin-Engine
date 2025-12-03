@@ -8,6 +8,7 @@
 #include <vector>
 #include <iostream>
 
+#include "Physics.h"
 #include "temp.h"
 
 
@@ -30,7 +31,9 @@ private:
     bool running = true;
     Camera2D camera;
     Player player;
-    std::vector<Map> maps{2};
+    std::vector<Map> maps{MAPID_COUNT};
+    MAPID activeMap = HOUSE;
+    std::vector<Box2D*> collisionBoxes;
 
 
     void init() {
@@ -42,8 +45,9 @@ private:
         camera.offset = {GetScreenWidth()/2.0f - 8, GetScreenHeight()/2.0f - 8}; // 8 is half the player sprite w and h
 
 
-        player.init({0,0}, 1);
-/*
+        player.init({0,0}, 1, &collisionBoxes);
+        collisionBoxes.emplace_back(&player.physicsBox);
+
         tmx::Map tempMap;
         if (!tempMap.load("assets/maps/playerHouse.tmx")) {
             running = false;
@@ -51,8 +55,9 @@ private:
             THROW_ERROR("Failed to load map");
         }
 
-        maps[0].loadMap(&tempMap, &player.position);
-*/
+        maps[HOUSE].loadMap(&tempMap, player.position, &collisionBoxes);
+
+        /*
         tmx::Map tempMap2;
         if (!tempMap2.load("assets/maps/mainIsland.tmx")) {
             running = false;
@@ -60,12 +65,13 @@ private:
             THROW_ERROR("Failed to load map");
         }
 
-        maps[1].loadMap(&tempMap2, &player.position);
+        maps[MAIN_ISLAND].loadMap(&tempMap2, player.position, &collisionBoxes);
+*/
 
     }
 
     void updateCamera() {
-        camera.target = player.position;
+        camera.target = *player.position;
     }
 
 
@@ -94,7 +100,7 @@ private:
     }
 
     void animate() {
-        maps[1].animate();
+        maps[activeMap].animate();
     }
 
 
@@ -104,8 +110,12 @@ private:
 
             BeginMode2D(camera);
 
-                maps[1].render();
+                maps[activeMap].render();
                 player.render();
+
+                for (auto& box : collisionBoxes) {
+                    box->render();
+                }
 
             EndMode2D();
 
