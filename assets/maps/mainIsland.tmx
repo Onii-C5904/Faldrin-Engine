@@ -397,7 +397,11 @@
   </data>
  </layer>
  <objectgroup id="4" name="doors">
-  <object id="2" gid="137" x="-256" y="32" width="16" height="16"/>
+  <object id="2" gid="137" x="-256" y="32" width="16" height="16">
+   <properties>
+    <property name="doorID" type="int" value="0"/>
+   </properties>
+  </object>
  </objectgroup>
  <layer id="6" name="groundTileObjects2" width="30" height="20">
   <data encoding="csv">

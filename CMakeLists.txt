@@ -19,6 +19,10 @@ add_executable(Faldrin_Engine.exe
         src/engine/temp.h
         src/engine/Physics.h
         src/engine/Physics.cpp
+        src/engine/Interaction.cpp
+        src/engine/Interaction.h
+        src/rendering/Rendering.h
+        src/rendering/Rendering.cpp
 )
 
 

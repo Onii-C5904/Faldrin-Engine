@@ -14,13 +14,15 @@
 #define RIGHT_NORMAL {1, 0}
 
 #include <raylib.h>
-#include <raymath.h>
 #include <vector>
 #include <algorithm>
+#include <raymath.h>
+#include "Interaction.h"
 
 struct Box2D;
 struct Polygon2D;
 struct Circle2D;
+struct InteractionObject;
 
 
 
@@ -61,8 +63,12 @@ struct Circle2D {
 
 
 // UNIVERSAL PHYISICS FUNCTIONS
-void SATCollisionCheckAndResolution(std::vector<Vector2> self, std::vector<Vector2> target);
+bool SATCollisionCheckAndResolution(std::vector<Vector2> self, std::vector<Vector2> target);
+
+bool SATCollisionCheck(std::vector<Vector2> self, std::vector<Vector2> target);
 
 void slideAndCollide(Box2D* box, std::vector<Box2D*>* collisionBoxes);
+
+bool InteractionObjectCollisionCheck(InteractionObject* obj1, Box2D* collisionBox);
 
 #endif //PHYSICS_H

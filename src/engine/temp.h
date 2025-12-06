@@ -9,6 +9,7 @@
 #include <tmxlite/Layer.hpp>
 #include <tmxlite/TileLayer.hpp>
 #include <tmxlite/ObjectGroup.hpp>
+#include "../rendering/Rendering.h"
 
 
 struct PlayerSpawn;
@@ -34,10 +35,26 @@ enum MAPID {
 
 
 struct Door {
+    Vector2 position;
     int doorID;
     int mapID;
     PlayerSpawn* playerSpawn;
     Door* linkedDoor;
+    InteractionCircle2D interactionBox;
+    Player* player;
+
+    void transition() {
+        std::cout << "transition" << std::endl;
+    }
+
+    void update() {
+        interactionBox.update(&(player->physicsBox));
+    }
+
+    //  FOR DEBUG ONLY
+    void render() {
+        interactionBox.render({255,255,255,255}, false);
+    }
 };
 
 struct PlayerSpawn {
@@ -52,27 +69,6 @@ struct Tile {
     bool animated;
 };
 
-struct TMXTexture {
-    Texture2D* texture;
-    Rectangle* clipRect;
-    int x;
-    int y;
-};
-
-struct TMXAnimatedTexture {
-    Texture2D* texture;
-    std::vector<float> frameDelayTimes;
-    double lastFrameTime = 0.0;
-    int frameCount = 0;
-    int currentFrame = 0;
-    int x;
-    int y;
-
-    Rectangle createAnimationFrameRect() {
-        return Rectangle{static_cast<float>(16 * currentFrame),0,16,16};
-    }
-};
-
 struct Map {
     std::vector<std::vector<TMXTexture>> layerTextures;
     std::vector<std::vector<TMXAnimatedTexture>> animatedLayerTextures;
@@ -81,6 +77,8 @@ struct Map {
     std::vector<Box2D> colBoxes;
     std::vector<PlayerSpawn> playerSpawns;
     PlayerSpawn defaultPlayerSpawn;
+    std::vector<Door> doors;
+    MAPID mapid;
 
 
     void animate() {
@@ -107,12 +105,23 @@ struct Map {
             for (int texture = 0; texture < animatedLayerTextures[layer].size(); texture++) {
                 DrawTextureRec(*animatedLayerTextures[layer][texture].texture, animatedLayerTextures[layer][texture].createAnimationFrameRect(), {static_cast<float>(animatedLayerTextures[layer][texture].x), static_cast<float>(animatedLayerTextures[layer][texture].y)}, RAYWHITE);
             }
+
+            // DOORS
+            for (auto& door : doors) {
+                door.render();
+            }
         }
 
-    };
+    }
 
+    void update() {
+        for (auto& door : doors) {
+            door.update();
+        }
+    }
 
-    Map loadMap(tmx::Map *map, Vector2* playerPos, std::vector<Box2D*>* collisionBoxes) {
+    Map loadMap(tmx::Map *map, MAPID mapid, Player* player, std::vector<Box2D*>* collisionBoxes) {
+        this->mapid = mapid;
         uint32_t tilesetTileCount = 0;
         std::vector<std::string> tilesetTexturePaths;
         std::vector<std::pair<uint32_t, uint32_t>> tilesetIDs;
@@ -147,9 +156,6 @@ struct Map {
 
 
         }
-
-
-
 
 
         int currentLayer = 0;
@@ -254,8 +260,8 @@ struct Map {
                         playerSpawns.emplace_back(PlayerSpawn{spawn.getPosition().x - (tileSize/2.0f), spawn.getPosition().y - (tileSize/2.0f)});
                     }
                     defaultPlayerSpawn = playerSpawns[0];
-                    playerPos->x = defaultPlayerSpawn.position.x;
-                    playerPos->y = defaultPlayerSpawn.position.y;
+                    player->position->x = defaultPlayerSpawn.position.x;
+                    player->position->y = defaultPlayerSpawn.position.y;
                 }
 
                 else if (objectLayer.getName() == "collisions") {
@@ -270,6 +276,58 @@ struct Map {
                         constructedBox.height = collisionBox.height;
 
                         colBoxes.emplace_back(constructedBox);
+                    }
+                }
+
+                else if (objectLayer.getName() == "doors") {
+                    std::vector<tmx::Object> objects = objectLayer.getObjects();
+                    std::vector<Tile> tileData;
+                    for (int i = 0; i < objects.size(); i++) {
+                        Tile td;
+                        td.id = objects[i].getTileID();
+                        td.x = objects[i].getPosition().x;
+                        td.y = objects[i].getPosition().y;
+                        tileData.emplace_back(td);
+
+                        Door dr;
+                        dr.position.x = objects[i].getPosition().x;
+                        dr.position.y = objects[i].getPosition().y - (objects[i].getAABB().height / 2);
+                        dr.mapID = this->mapid;
+                        dr.player = player;
+
+                        const auto& properties = objects[i].getProperties();
+                        for (const auto& prop : properties) {
+                            if ( prop.getName() == "doorID") {
+                                dr.doorID = prop.getIntValue();
+                            }
+                        }
+
+                        doors.emplace_back(dr);
+
+                        Door& lastDoor = doors.back();
+
+                        InteractionCircle2D ib;
+                        ib.position.x = dr.position.x  + (objects[i].getAABB().width / 2);
+                        ib.position.y = dr.position.y;
+                        ib.radius = 2.0f;
+                        ib.function = [&lastDoor]() { lastDoor.transition(); };
+
+                        doors.back().interactionBox = ib;
+
+                        layerTextures[currentLayer].resize(tileData.size());
+                        for (int i = 0; i < tileData.size(); i++) {
+
+                            layerTextures[currentLayer][i].texture = &tilesetTextures[getTileSet(tileData[i].id, tilesetIDs)];
+
+                            for (int j = 0; j < tilesetClipRects.size(); j++) {
+                                if (j +1 == tileData[i].id) {
+                                    layerTextures[currentLayer][i].clipRect = &tilesetClipRects[j];
+                                }
+                            }
+
+                            layerTextures[currentLayer][i].x = tileData[i].x;
+                            layerTextures[currentLayer][i].y = tileData[i].y - 16;
+                        }
                     }
                 }
 

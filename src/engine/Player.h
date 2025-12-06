@@ -17,6 +17,7 @@ public:
     void init(Vector2 pos, float speed, std::vector<Box2D*>* colBoxes);
     void update();
     void render();
+    Sprite* getSprite();
     Box2D physicsBox;
     Vector2* position = &physicsBox.position;
     Vector2* dir = &physicsBox.direction;

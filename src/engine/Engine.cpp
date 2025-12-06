@@ -10,6 +10,7 @@
 
 #include "Physics.h"
 #include "temp.h"
+#include "../rendering/Rendering.h"
 
 
 class Engine {
@@ -55,9 +56,9 @@ private:
             THROW_ERROR("Failed to load map");
         }
 
-        maps[HOUSE].loadMap(&tempMap, player.position, &collisionBoxes);
+        maps[HOUSE].loadMap(&tempMap, HOUSE, &player, &collisionBoxes);
 
-        /*
+/*
         tmx::Map tempMap2;
         if (!tempMap2.load("assets/maps/mainIsland.tmx")) {
             running = false;
@@ -76,8 +77,10 @@ private:
 
 
     void update() {
+        maps[activeMap].update();
         player.update();
         updateCamera();
+
     }
 
     void pollInput() {
@@ -105,13 +108,19 @@ private:
 
 
     void render() {
+        std::vector<SpriteInstance> sprites {SpriteInstance {*player.position - player.physicsBox.offset, player.getSprite()} };
+        auto renderQueue = buildRenderQueue(sprites, maps[activeMap].layerTextures, maps[activeMap].animatedLayerTextures);
+
         BeginDrawing();
             ClearBackground(BLACK);
 
             BeginMode2D(camera);
 
-                maps[activeMap].render();
-                player.render();
+                for (const auto& item : renderQueue) {
+                    item.render();
+                }
+                //maps[activeMap].render();
+                //player.render();
 
                 for (auto& box : collisionBoxes) {
                     box->render();
@@ -122,6 +131,8 @@ private:
         // DEBUG DRAWS
         DrawText(("Frame Time: " + std::to_string(GetFrameTime())).c_str(), 10, 10, 20, GREEN);
         DrawText(("Frame Rate: " + std::to_string(1.0f / GetFrameTime())).c_str(), 10, 30, 20, GREEN);
+        DrawText(("Position X: " + std::to_string(player.position->x)).c_str(), 10, 50, 20, GREEN);
+        DrawText(("Position Y: " + std::to_string(player.position->y)).c_str(), 10, 70, 20, GREEN);
 
         EndDrawing();
     }

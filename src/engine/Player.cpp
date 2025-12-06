@@ -14,6 +14,10 @@ void Player::init(Vector2 pos, float speed, std::vector<Box2D*>* colBoxes) {
     collisionBoxes = colBoxes;
 }
 
+Sprite* Player::getSprite() {
+    return &sprite;
+}
+
 void Player::render() {
     sprite.render(*position - physicsBox.offset);
 }

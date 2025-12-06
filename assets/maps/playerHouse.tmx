@@ -101,7 +101,11 @@
   <object id="13" gid="21" x="0" y="92" width="16" height="16"/>
  </objectgroup>
  <objectgroup id="9" name="doors">
-  <object id="18" gid="75" x="48" y="112" width="16" height="16"/>
+  <object id="18" gid="75" x="48" y="112" width="16" height="16">
+   <properties>
+    <property name="doorID" type="int" value="0"/>
+   </properties>
+  </object>
  </objectgroup>
  <objectgroup color="#000000" id="7" name="lightSource">
   <object id="15" x="20" y="30">
